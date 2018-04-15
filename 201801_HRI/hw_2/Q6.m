@@ -39,52 +39,55 @@ mdl_puma560;
 t_delta = 0.01;
 t = (0:t_delta:1)';
 
+cutoff = 40;
+
 % Actual Positions
 
 start = [-0.2; -0.7; 0.2];
 stop  = [ 0.1;  0.8; 0.3];
 
+% it can do the first cutoff or so and last cutoff or so steps fine.
+
 P1 = rt2tr(eye(3), start);
 P2 = rt2tr(eye(3), stop);
 
-% Example of Linear that Works
-%P1 = rt2tr(eye(3), [.5; .5; -.5]);
-%P2 = rt2tr(eye(3), [.5; -.5; .5]);
+Ts_linear = ctraj(P1, P2, length(t));
+Ts_linear_1 = Ts_linear(:, :, 1:cutoff);
+Ts_linear_2 = Ts_linear(:, :, end-cutoff+1:end);
 
-% Joint-Space Trajectory
-%q1 = p560.ikine6s(P1, 'ru');
-%q2 = p560.ikine6s(P2, 'ld');
-%q = mtraj(@tpoly, q1, q2, t);
-%q = jtraj(q1, q2, t);
 
-q1 = p560.ikine(P1, 'ru');
+%%
+q_linear_1 = p560.ikine6s(Ts_linear_1, 'ru');
+%figure;
+%p560.name = 'Linear Part 1';
+%p560.plot(q_linear_1);
+
+%%
+q_linear_2 = p560.ikine6s(Ts_linear_2, 'ld');
+%figure;
+%p560.name = 'Linear Part 2';
+%p560.plot(q_linear_2);
+
+
+%%
+q_rot = jtraj(q_linear_1(end, :), q_linear_2(1, :), cutoff);
+%Ts_rot_init = p560.fkine(q_rot);
+%Ts_rot = Ts_rot_init.T;
+%Ts_rot(1:3, 1:3, :) = repmat(eye(3), 1, 1, size(Ts_rot, 3));
+%q_rot = p560.ikine6s(Ts_rot, 'ru');
+%figure;
+%p560.name = 'Rot';
+%p560.plot(q_rot);
+
+%%
+q = [q_linear_1; q_rot; q_linear_2];
 figure;
-p560.name = 'P1';
-p560.plot(q1);
-
-q2 = p560.ikine(P2, 'ld');
-figure;
-p560.name = 'P2';
-p560.plot(q2);
-Ts = ctraj(P1, P2, length(t));
-
-% For some reason it can't converge...
-%q = p560.ikine(Ts, 'ru');
-
-figure;
-p560.name = 'Stepper';
-q = zeros(size(Ts, 3), 6);
-for step = 1:size(Ts, 3)
-    disp(step);
-    q(step, :) = p560.ikine(Ts(:,:,step));
-    p560.plot(q(step, :));
-end
-
-figure;
-p560.name = 'P1=>P2';
+p560.name = 'All';
 p560.plot(q);
 
+%%
 figure;
+title('End effector position');
 axis equal;
 htrail = plot3(0, 0, 0, 'rx');
 title('P1=>P2');
