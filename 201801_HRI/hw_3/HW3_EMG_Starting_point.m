@@ -1,12 +1,19 @@
 % Program / Class example of simple EMG processing of stored data
 % modify with your algorithms and data.
+
+clear;
+close all;
+
 teaching=1;
+
+NUM_SAMPLES = 18001;
 
 % Un-Comment out the file you want to read 
 
 
 %a= 'vie_emg_20091012_185408_ch1234.mat';
-a= 'vie_emg_20091012_185442_ch1234.mat';
+%a= 'vie_emg_20091012_185442_ch1234.mat';
+a = 'EMG1.mat';
 %a = 'vie_emg_20091012_185521_ch1234.mat'
 %a='vie_emg_20091012_185550_ch1234.mat';
 %a= 'vie_emg_20091012_185649_ch1234.mat';
@@ -20,27 +27,27 @@ Zero_crossing=0;  % Set to 1 to use zero crossing instead of amplitude
 
 envelope=50;  % Envelope window for max function
 Intent_filter=100; % Window length for intent determination
-thres_start=[0.1,0.1,0.1,0.1]  % Use same threshold for all channels
-thres_start=[0.07,0.11,0.07,0.05]  % Use individual threshold for each channel
-if (Zero_crossing) thres_start=thres_start*envelope*6
+thres_start=[0.1,0.1,0.1,0.1];  % Use same threshold for all channels
+%thres_start=[0.07,0.11,0.07,0.05]  % Use individual threshold for each channel
+if (Zero_crossing)
+    thres_start=thres_start*envelope*6;
 end
 
 figure(1);
-subplot(2,2,1);plot(data(:,18),data(:,1),'b')
-subplot(2,2,2);plot(data(:,18),data(:,2),'g')
-subplot(2,2,3);plot(data(:,18),data(:,3),'r')
-subplot(2,2,4);plot(data(:,18),data(:,4),'c')
-figure(5);
-subplot(1,1,1);plot(data(:,18),data(:,1),'b',data(:,18),data(:,2),...
-    'g',data(:,18),data(:,3),'r',data(:,18),data(:,4),'c')
+title('Initial Data');
+subplot(2,2,1);plot(data(:,18),data(:,1),'b');
+subplot(2,2,2);plot(data(:,18),data(:,2),'g');
+subplot(2,2,3);plot(data(:,18),data(:,3),'r');
+subplot(2,2,4);plot(data(:,18),data(:,4),'c');
 
-if teaching k = waitforbuttonpress 
+if teaching
+    k = waitforbuttonpress;
 end
 
 % 1000 Hz sample rate
 %% First Lever is the boxcar average
 % Calculate rolling DC offset for subtracting from the signals                     
-for i=DC_Avg:1:18001
+for i=DC_Avg:1:NUM_SAMPLES
     data(i,5)=sum(data(i-(DC_Avg-1):i,1)/DC_Avg);
     data(i,6)=sum(data(i-(DC_Avg-1):i,2)/DC_Avg);
     data(i,7)=sum(data(i-(DC_Avg-1):i,3)/DC_Avg);
@@ -51,44 +58,76 @@ data(1:DC_Avg-1,6)=data(DC_Avg,6);
 data(1:DC_Avg-1,7)=data(DC_Avg,7);
 data(1:DC_Avg-1,8)=data(DC_Avg,8);
 
-figure(1)
+figure(2);
+title('Initial Data with DC Average');
 subplot(2,2,1);plot(data(:,18),data(:,1),'b',data(:,18),data(:,5),'r');
 subplot(2,2,2);plot(data(:,18),data(:,2),'b',data(:,18),data(:,6),'r');
 subplot(2,2,3);plot(data(:,18),data(:,3),'b',data(:,18),data(:,7),'r');
 subplot(2,2,4);plot(data(:,18),data(:,4),'b',data(:,18),data(:,8),'r');
 
-if teaching k = waitforbuttonpress 
+if teaching
+    k = waitforbuttonpress;
 end
 
 %%  Subtract the rolling DC offset from the signal
 % to create 4 signals with zero as the minimum and
 % that will allow for Evelope calculation and thresholding
 
+data(:, 1:4) = data(:, 1:4) - data(:, 5:8);
 
-if (Zero_crossing)
-data(:,9)=
-data(:,10)=
-data(:,11)=
-data(:,12)=
-else %use mAV
-data(:,9)=
-data(:,10)=
-data(:,11)=
-data(:,12)=
+figure(3);
+title('Subtract Rolling DC Offset');
+subplot(2,2,1);plot(data(:,18),data(:,1),'b');
+subplot(2,2,2);plot(data(:,18),data(:,2),'g');
+subplot(2,2,3);plot(data(:,18),data(:,3),'r');
+subplot(2,2,4);plot(data(:,18),data(:,4),'c');
+if teaching
+    k = waitforbuttonpress;
 end
 
-figure(1)
-subplot(2,2,1);plot(data(:,18),data(:,9),'b')
-subplot(2,2,2);plot(data(:,18),data(:,10),'g')
-subplot(2,2,3);plot(data(:,18),data(:,11),'r')
-subplot(2,2,4);plot(data(:,18),data(:,12),'c')
-figure(5)
+%% Zero Crossing or MAV
+
+figure(4);
+if (Zero_crossing)
+    % todo: I understand the criteria, but what is the actual value?
+    title('Zero Crossing');
+    data(:,9)=data(:,1)-data(:,5);
+    data(:,10)=data(:,2)-data(:,6);
+    data(:,11)=data(:,3)-data(:,7);
+    data(:,12)=data(:,4)-data(:,8);
+else %use mAV % mean absolute value?
+    title('MAV');
+    for i = LPF:1:NUM_SAMPLES
+        data(i,9)=sum(abs(data(i-(LPF-1):i,1)))/LPF;
+        data(i,10)=sum(abs(data(i-(LPF-1):i,2)))/LPF;
+        data(i,11)=sum(abs(data(i-(LPF-1):i,3)))/LPF;
+        data(i,12)=sum(abs(data(i-(LPF-1):i,4)))/LPF;
+    end
+    data(1:LPF-1,9:12) = data(LPF, 9:12) .* ones(LPF-1, 4);
+end
+
+subplot(2,2,1);plot(data(:,18),data(:,9),'b');
+subplot(2,2,2);plot(data(:,18),data(:,10),'g');
+subplot(2,2,3);plot(data(:,18),data(:,11),'r');
+subplot(2,2,4);plot(data(:,18),data(:,12),'c');
+
+if teaching
+    k = waitforbuttonpress;
+end
+
+%% Overlay
+
+figure(5);
+title('Overlay All Channels after Zero Crossing or MAV');
 subplot(1,1,1);plot(data(:,18),data(:,9),'b',data(:,18),data(:,10),'g',data(:,18),data(:,11),'r',data(:,18),data(:,12),'c')
 
-if teaching k = waitforbuttonpress 
+if teaching
+    k = waitforbuttonpress;
 end
 
 %% average high sample rate data to get an 'continuous' curve
+
+% todo What do I do here?
 
 %% Binary Sum Order is determined here
 %data(:,5)=data(:,3)*8+data(:,4)*4+data(:,2)*2+data(:,1);
@@ -96,7 +135,7 @@ data(:,5)=data(:,1)*8+data(:,2)*4+data(:,3)*2+data(:,4)*1;
 figure(6);
 plot(data(:,18),data(:,5));
 text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4.2f\nUse Env = %d ; Envelope Width=%d\nIntent filter=%d ',...
-    a,DC_Avg,LPF,thres,use_env,envelope, Intent_filter),...
+    a,DC_Avg,LPF,thres_start,use_env,envelope, Intent_filter),...
      'HorizontalAlignment','left')
 
 
@@ -108,10 +147,12 @@ text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4
 %
 
 
+% todo What the heck is an epoch? I suppose I need to figure out how to use
+% the intent filter?
 figure(7);
 plot(data(:,18),(data(:,7)));
 text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4.2f\nUse Env = %d ; Envelope Width=%d\nIntent filter=%d ',...
-    a,DC_Avg,LPF,thres,use_env,envelope, Intent_filter),...
+    a,DC_Avg,LPF,thres_start,use_env,envelope, Intent_filter),...
      'HorizontalAlignment','left')
 
 
@@ -120,14 +161,15 @@ moves=[1.0 1.0];
 
 %%direct control
 
-figure(8)
-plot(moves(:,1), moves(:,2),':+');
-text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4.2f\nUse Env = %d ; Envelope Width=%d\nIntent filter=%d ',...
-    a,DC_Avg,LPF,thres,use_env,envelope, Intent_filter),...
-     'HorizontalAlignment','left')
+%figure(8)
+%plot(moves(:,1), moves(:,2),':+');
+%text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4.2f\nUse Env = %d ; Envelope Width=%d\nIntent filter=%d ',...
+%    a,DC_Avg,LPF,thres_start,use_env,envelope, Intent_filter),...
+%     'HorizontalAlignment','left')
 
-save ('./Dorsey/movements_', 'moves');
+%save ('./Dorsey/movements_', 'moves');
+
+if teaching
+    k = waitforbuttonpress;
 end
-
-
  
