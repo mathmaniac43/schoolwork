@@ -1,42 +1,37 @@
-% Program / Class example of simple EMG processing of stored data
-% modify with your algorithms and data.
+%% HW3
+% Paul "Nick" Laurenzano
 
 clear;
 close all;
 
-teaching=0;
-
-NUM_SAMPLES = 18001;
-FS = 1000;
-
-% Un-Comment out the file you want to read 
-
-%load('EMG1.mat');
-%thresh_vals = [0.03, 0.08, 0.045, 0.03];
-%weights = [8, 4, 2, 1];
-
-load('EMG2.mat');
-thresh_vals = [0.035, 0.06, 0.06, 0.05];
-weights = [8, 4, 2, 1];
-
-%load('EMG3.mat');
-%thresh_vals = [0.05, 0.05, 0.05, 0.05];
-%weights = [8, 4, 2, 1];
-
-
-DC_Avg=500; % number of samples to average for the DC subtraction
-LPF=400;    %200 
-use_env = 0;      % 1= evelope 0=average
-Zero_crossing=0;  % Set to 1 to use zero crossing instead of amplitude
-
-envelope=50;  % Envelope window for max function
-Intent_filter=100; % Window length for intent determination
-if (Zero_crossing)
-    thresh_vals=thresh_vals*envelope*6;
+file_num = 1;
+if file_num == 1
+    disp('Loading 1');
+    load('EMG1.mat');
+    thresh_vals = [0.038, 0.09, 0.063, 0.034];
+    weights = [8, 4, 2, 1];
+elseif file_num == 2
+    disp('Loading 2');
+    load('EMG2.mat');
+    thresh_vals = [0.035, 0.06, 0.06, 0.05];
+    weights = [8, 4, 2, 1];
+elseif file_num == 3
+    disp('Loading 3');
+    load('EMG3.mat');
+    thresh_vals = [0.03, 0.069, 0.047, 0.044];
+    weights = [2, 1, 4, 8];
 end
 
+FS           = 1000;
+NUM_SAMPLES  = size(data, 1);
 raw_channels = [data(:,1), data(:,2), data(:,3), data(:,4)];
 raw_time     = data(:,18);
+
+DC_Avg = 500; % number of samples to average for the DC subtraction
+LPF    = 400;
+intent = 800;
+
+VEL_FACTOR = 0.1;
 
 figure;
 subplot(2,2,1);plot(raw_time, raw_channels(:,1),'b');
@@ -45,19 +40,14 @@ subplot(2,2,3);plot(raw_time, raw_channels(:,3),'r');
 subplot(2,2,4);plot(raw_time, raw_channels(:,4),'c');
 title('Raw Data');
 
-if teaching
-    k = waitforbuttonpress;
-end
-
-% 1000 Hz sample rate
 %% First Lever is the boxcar average
 % Calculate rolling DC offset for subtracting from the signals
 dc_avg = zeros(NUM_SAMPLES, 4);
 for i=DC_Avg:1:NUM_SAMPLES
-    dc_avg(i,1) = sum(data(i-(DC_Avg-1):i,1)/DC_Avg);
-    dc_avg(i,2) = sum(data(i-(DC_Avg-1):i,2)/DC_Avg);
-    dc_avg(i,3) = sum(data(i-(DC_Avg-1):i,3)/DC_Avg);
-    dc_avg(i,4) = sum(data(i-(DC_Avg-1):i,4)/DC_Avg);
+    dc_avg(i,1) = sum(raw_channels(i-(DC_Avg-1):i,1)/DC_Avg);
+    dc_avg(i,2) = sum(raw_channels(i-(DC_Avg-1):i,2)/DC_Avg);
+    dc_avg(i,3) = sum(raw_channels(i-(DC_Avg-1):i,3)/DC_Avg);
+    dc_avg(i,4) = sum(raw_channels(i-(DC_Avg-1):i,4)/DC_Avg);
 end
 dc_avg(1:DC_Avg-1,1) = dc_avg(DC_Avg,1);
 dc_avg(1:DC_Avg-1,2) = dc_avg(DC_Avg,2);
@@ -73,20 +63,8 @@ subplot(2,2,3);plot(raw_time, shifted_channels(:,3),'r');
 subplot(2,2,4);plot(raw_time, shifted_channels(:,4),'c');
 title('Offset Average About Zero');
 
-if teaching
-    k = waitforbuttonpress;
-end
-
 %% Zero Crossing or MAV
-
-if (Zero_crossing)
-    % todo: I understand the criteria, but what is the actual value?
-    % count over the filter length
-    disp 'Not ready.';
-    return;
-else %use mAV
-    mav = smoothdata(shifted_channels, 1, 'movmean', [0, LPF-1]);
-end
+mav = smoothdata(shifted_channels, 1, 'movmean', [0, LPF-1]);
 
 figure;
 subplot(2,2,1);
@@ -111,10 +89,6 @@ plot([raw_time(1), raw_time(end)], [thresh_vals(4), thresh_vals(4)], 'k');
 hold off;
 title('MAV');
 
-if teaching
-    k = waitforbuttonpress;
-end
-
 %% Convert data to binary
 thresh(:,1) = uint8(mav(:,1) > thresh_vals(1));
 thresh(:,2) = uint8(mav(:,2) > thresh_vals(2));
@@ -128,43 +102,53 @@ legend('1', '2', '3', '4');
 
 %% Binary Sum Order is determined here
 
-% Data set 1
-%bin_sum = thresh(:,4)*8 + thresh(:,2)*4 + thresh(:,3)*2 + thresh(:,1)*1;
-
-% Data set 3
-bin_sum = weights(1) * thresh(:,1) + ...
-          weights(2) * thresh(:,2) + ...
-          weights(3) * thresh(:,3) + ...
-          weights(4) * thresh(:,4);
+bin_sum_raw = int8( ...
+    weights(1) * thresh(:,1) + ...
+    weights(2) * thresh(:,2) + ...
+    weights(3) * thresh(:,3) + ...
+    weights(4) * thresh(:,4) ...
+);
 
 figure;
-plot(raw_time, bin_sum);
-title('Binary Sum');
+plot(raw_time, bin_sum_raw);
+title('Binary Sum Raw');
 
-blanks = uint8(zeros(NUM_SAMPLES, 4));
-blanks((1*FS+1):2*FS, :) = uint8(ones(FS, 4));
-blanks((3*FS+1):4*FS, :) = uint8(ones(FS, 4));
-blanks((5*FS+1):6*FS, :) = uint8(ones(FS, 4));
-blanks((7*FS+1):8*FS, :) = uint8(ones(FS, 4));
-blanks((9*FS+1):10*FS, :) = uint8(ones(FS, 4));
-blanks((11*FS+1):12*FS, :) = uint8(ones(FS, 4));
-blanks((13*FS+1):14*FS, :) = uint8(ones(FS, 4));
-blanks((15*FS+1):16*FS, :) = uint8(ones(FS, 4));
-blanks((17*FS+1):18*FS, :) = uint8(ones(FS, 4));
-
-bin_sum_blanked = bin_sum .* blanks;
+bin_sum_refined = int8(round(smoothdata(bin_sum_raw, 1, 'movmedian', intent)));
 figure;
-plot(raw_time, bin_sum_blanked);
-title('Binary Sum Blanked');
+plot(raw_time, bin_sum_refined);
+title('Binary Sum Refined');
 
-bin_sum_2 = smoothdata(bin_sum, 1, 'movmedian', 400);
-figure;
-plot(raw_time, bin_sum_2);
-title('Binary Sum 2');
+%% Estimate/Interpret the State
 
-states = zeros(9,1);
-for i = 0:8
-    start = (2*i + 1)*FS + 1;
-    stop  = 2*(i + 1)*FS;
-    states(i+1) = mode(bin_sum_2(start:stop));
+state_weight = zeros(16, 1);
+for i = 1:length(bin_sum_refined)
+    state = bin_sum_refined(i);
+    % Ignore the zero state and focus on odd seconds for when the motion
+    % should have occurred.
+    state_weight(state+1) = state_weight(state+1) + ...
+        (state > 0 && mod(floor(i/FS), 2) == 1);
 end
+
+[sorted_state_counts, sorted_indices] = sort(state_weight, 'descend');
+sorted_states = sorted_indices - 1; % ignore the zero state
+
+%% Associate each state with a motion
+
+state_velocities = zeros(16, 4);
+state_velocities(:, 1) = sorted_states;
+state_velocities(1:3, 2:4) =  eye(3) * VEL_FACTOR; % highest 3 are +X, +Y, +Z
+state_velocities(4:6, 2:4) = -eye(3) * VEL_FACTOR; % next highest 3 are -X, -Y, -Z
+% remainder are zeros
+
+% This is the mapping from state number (0-15, including invalid states) to
+% X/Y/Z velocities.
+state_velocities = sortrows(state_velocities, 1);
+disp('State #, X vel., Y vel., Z vel.');
+disp(state_velocities);
+
+intent_states = int8(round(smoothdata(decimate(double(bin_sum_refined), 100), 1, 'movmedian', 5)));
+Intents = [(0:0.1:18)', state_velocities(intent_states+1, 2:4)];
+save('Intents');
+
+% TODO: HANDLE JACOBIAN AND GENERATE Vels.mat
+
