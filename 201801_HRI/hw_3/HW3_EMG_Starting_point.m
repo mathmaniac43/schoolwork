@@ -4,41 +4,46 @@
 clear;
 close all;
 
-teaching=1;
+teaching=0;
 
 NUM_SAMPLES = 18001;
+FS = 1000;
 
 % Un-Comment out the file you want to read 
 
+%load('EMG1.mat');
+%thresh_vals = [0.03, 0.08, 0.045, 0.03];
+%weights = [8, 4, 2, 1];
 
-%a= 'vie_emg_20091012_185408_ch1234.mat';
-%a= 'vie_emg_20091012_185442_ch1234.mat';
-a = 'EMG1.mat';
-%a = 'vie_emg_20091012_185521_ch1234.mat'
-%a='vie_emg_20091012_185550_ch1234.mat';
-%a= 'vie_emg_20091012_185649_ch1234.mat';
+load('EMG2.mat');
+thresh_vals = [0.035, 0.06, 0.06, 0.05];
+weights = [8, 4, 2, 1];
 
-load(a);
+%load('EMG3.mat');
+%thresh_vals = [0.05, 0.05, 0.05, 0.05];
+%weights = [8, 4, 2, 1];
+
 
 DC_Avg=500; % number of samples to average for the DC subtraction
-LPF=200;    % 
+LPF=400;    %200 
 use_env = 0;      % 1= evelope 0=average
 Zero_crossing=0;  % Set to 1 to use zero crossing instead of amplitude
 
 envelope=50;  % Envelope window for max function
 Intent_filter=100; % Window length for intent determination
-thres_start=[0.1,0.1,0.1,0.1];  % Use same threshold for all channels
-%thres_start=[0.07,0.11,0.07,0.05]  % Use individual threshold for each channel
 if (Zero_crossing)
-    thres_start=thres_start*envelope*6;
+    thresh_vals=thresh_vals*envelope*6;
 end
 
-figure(1);
-title('Initial Data');
-subplot(2,2,1);plot(data(:,18),data(:,1),'b');
-subplot(2,2,2);plot(data(:,18),data(:,2),'g');
-subplot(2,2,3);plot(data(:,18),data(:,3),'r');
-subplot(2,2,4);plot(data(:,18),data(:,4),'c');
+raw_channels = [data(:,1), data(:,2), data(:,3), data(:,4)];
+raw_time     = data(:,18);
+
+figure;
+subplot(2,2,1);plot(raw_time, raw_channels(:,1),'b');
+subplot(2,2,2);plot(raw_time, raw_channels(:,2),'g');
+subplot(2,2,3);plot(raw_time, raw_channels(:,3),'r');
+subplot(2,2,4);plot(raw_time, raw_channels(:,4),'c');
+title('Raw Data');
 
 if teaching
     k = waitforbuttonpress;
@@ -46,130 +51,120 @@ end
 
 % 1000 Hz sample rate
 %% First Lever is the boxcar average
-% Calculate rolling DC offset for subtracting from the signals                     
+% Calculate rolling DC offset for subtracting from the signals
+dc_avg = zeros(NUM_SAMPLES, 4);
 for i=DC_Avg:1:NUM_SAMPLES
-    data(i,5)=sum(data(i-(DC_Avg-1):i,1)/DC_Avg);
-    data(i,6)=sum(data(i-(DC_Avg-1):i,2)/DC_Avg);
-    data(i,7)=sum(data(i-(DC_Avg-1):i,3)/DC_Avg);
-    data(i,8)=sum(data(i-(DC_Avg-1):i,4)/DC_Avg);
+    dc_avg(i,1) = sum(data(i-(DC_Avg-1):i,1)/DC_Avg);
+    dc_avg(i,2) = sum(data(i-(DC_Avg-1):i,2)/DC_Avg);
+    dc_avg(i,3) = sum(data(i-(DC_Avg-1):i,3)/DC_Avg);
+    dc_avg(i,4) = sum(data(i-(DC_Avg-1):i,4)/DC_Avg);
 end
-data(1:DC_Avg-1,5)=data(DC_Avg,5);  %Fill in the first DC_Avg samples with a the first average.  s
-data(1:DC_Avg-1,6)=data(DC_Avg,6);
-data(1:DC_Avg-1,7)=data(DC_Avg,7);
-data(1:DC_Avg-1,8)=data(DC_Avg,8);
+dc_avg(1:DC_Avg-1,1) = dc_avg(DC_Avg,1);
+dc_avg(1:DC_Avg-1,2) = dc_avg(DC_Avg,2);
+dc_avg(1:DC_Avg-1,3) = dc_avg(DC_Avg,3);
+dc_avg(1:DC_Avg-1,4) = dc_avg(DC_Avg,4);
 
-figure(2);
-title('Initial Data with DC Average');
-subplot(2,2,1);plot(data(:,18),data(:,1),'b',data(:,18),data(:,5),'r');
-subplot(2,2,2);plot(data(:,18),data(:,2),'b',data(:,18),data(:,6),'r');
-subplot(2,2,3);plot(data(:,18),data(:,3),'b',data(:,18),data(:,7),'r');
-subplot(2,2,4);plot(data(:,18),data(:,4),'b',data(:,18),data(:,8),'r');
+shifted_channels = abs(raw_channels - dc_avg);
 
-if teaching
-    k = waitforbuttonpress;
-end
+figure;
+subplot(2,2,1);plot(raw_time, shifted_channels(:,1),'b');
+subplot(2,2,2);plot(raw_time, shifted_channels(:,2),'g');
+subplot(2,2,3);plot(raw_time, shifted_channels(:,3),'r');
+subplot(2,2,4);plot(raw_time, shifted_channels(:,4),'c');
+title('Offset Average About Zero');
 
-%%  Subtract the rolling DC offset from the signal
-% to create 4 signals with zero as the minimum and
-% that will allow for Evelope calculation and thresholding
-
-data(:, 1:4) = data(:, 1:4) - data(:, 5:8);
-
-figure(3);
-title('Subtract Rolling DC Offset');
-subplot(2,2,1);plot(data(:,18),data(:,1),'b');
-subplot(2,2,2);plot(data(:,18),data(:,2),'g');
-subplot(2,2,3);plot(data(:,18),data(:,3),'r');
-subplot(2,2,4);plot(data(:,18),data(:,4),'c');
 if teaching
     k = waitforbuttonpress;
 end
 
 %% Zero Crossing or MAV
 
-figure(4);
 if (Zero_crossing)
     % todo: I understand the criteria, but what is the actual value?
-    title('Zero Crossing');
-    data(:,9)=data(:,1)-data(:,5);
-    data(:,10)=data(:,2)-data(:,6);
-    data(:,11)=data(:,3)-data(:,7);
-    data(:,12)=data(:,4)-data(:,8);
-else %use mAV % mean absolute value?
-    title('MAV');
-    for i = LPF:1:NUM_SAMPLES
-        data(i,9)=sum(abs(data(i-(LPF-1):i,1)))/LPF;
-        data(i,10)=sum(abs(data(i-(LPF-1):i,2)))/LPF;
-        data(i,11)=sum(abs(data(i-(LPF-1):i,3)))/LPF;
-        data(i,12)=sum(abs(data(i-(LPF-1):i,4)))/LPF;
-    end
-    data(1:LPF-1,9:12) = data(LPF, 9:12) .* ones(LPF-1, 4);
+    % count over the filter length
+    disp 'Not ready.';
+    return;
+else %use mAV
+    mav = smoothdata(shifted_channels, 1, 'movmean', [0, LPF-1]);
 end
 
-subplot(2,2,1);plot(data(:,18),data(:,9),'b');
-subplot(2,2,2);plot(data(:,18),data(:,10),'g');
-subplot(2,2,3);plot(data(:,18),data(:,11),'r');
-subplot(2,2,4);plot(data(:,18),data(:,12),'c');
+figure;
+subplot(2,2,1);
+hold on;
+plot(raw_time, mav(:,1), 'b');
+plot([raw_time(1), raw_time(end)], [thresh_vals(1), thresh_vals(1)], 'k');
+hold off;
+subplot(2,2,2);
+hold on;
+plot(raw_time, mav(:,2), 'g');
+plot([raw_time(1), raw_time(end)], [thresh_vals(2), thresh_vals(2)], 'k');
+hold off;
+subplot(2,2,3);
+hold on;
+plot(raw_time, mav(:,3), 'r');
+plot([raw_time(1), raw_time(end)], [thresh_vals(3), thresh_vals(3)], 'k');
+hold off;
+subplot(2,2,4);
+hold on;
+plot(raw_time, mav(:,4), 'c');
+plot([raw_time(1), raw_time(end)], [thresh_vals(4), thresh_vals(4)], 'k');
+hold off;
+title('MAV');
 
 if teaching
     k = waitforbuttonpress;
 end
 
-%% Overlay
+%% Convert data to binary
+thresh(:,1) = uint8(mav(:,1) > thresh_vals(1));
+thresh(:,2) = uint8(mav(:,2) > thresh_vals(2));
+thresh(:,3) = uint8(mav(:,3) > thresh_vals(3));
+thresh(:,4) = uint8(mav(:,4) > thresh_vals(4));
 
-figure(5);
-title('Overlay All Channels after Zero Crossing or MAV');
-subplot(1,1,1);plot(data(:,18),data(:,9),'b',data(:,18),data(:,10),'g',data(:,18),data(:,11),'r',data(:,18),data(:,12),'c')
-
-if teaching
-    k = waitforbuttonpress;
-end
-
-%% average high sample rate data to get an 'continuous' curve
-
-% todo What do I do here?
+figure;
+plot(raw_time, thresh);
+title('Thresholded');
+legend('1', '2', '3', '4');
 
 %% Binary Sum Order is determined here
-%data(:,5)=data(:,3)*8+data(:,4)*4+data(:,2)*2+data(:,1);
-data(:,5)=data(:,1)*8+data(:,2)*4+data(:,3)*2+data(:,4)*1;
-figure(6);
-plot(data(:,18),data(:,5));
-text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4.2f\nUse Env = %d ; Envelope Width=%d\nIntent filter=%d ',...
-    a,DC_Avg,LPF,thres_start,use_env,envelope, Intent_filter),...
-     'HorizontalAlignment','left')
 
+% Data set 1
+%bin_sum = thresh(:,4)*8 + thresh(:,2)*4 + thresh(:,3)*2 + thresh(:,1)*1;
 
-%% set the Intent change filter parameter
-% Controls how fast the system switches between 
-% different intents (motions)
-%  Larger Intent_filter causes slow transition but smooth motion
-% Lower Intent_filter causes quick transitions, but more noise 
-%
+% Data set 3
+bin_sum = weights(1) * thresh(:,1) + ...
+          weights(2) * thresh(:,2) + ...
+          weights(3) * thresh(:,3) + ...
+          weights(4) * thresh(:,4);
 
+figure;
+plot(raw_time, bin_sum);
+title('Binary Sum');
 
-% todo What the heck is an epoch? I suppose I need to figure out how to use
-% the intent filter?
-figure(7);
-plot(data(:,18),(data(:,7)));
-text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4.2f\nUse Env = %d ; Envelope Width=%d\nIntent filter=%d ',...
-    a,DC_Avg,LPF,thres_start,use_env,envelope, Intent_filter),...
-     'HorizontalAlignment','left')
+blanks = uint8(zeros(NUM_SAMPLES, 4));
+blanks((1*FS+1):2*FS, :) = uint8(ones(FS, 4));
+blanks((3*FS+1):4*FS, :) = uint8(ones(FS, 4));
+blanks((5*FS+1):6*FS, :) = uint8(ones(FS, 4));
+blanks((7*FS+1):8*FS, :) = uint8(ones(FS, 4));
+blanks((9*FS+1):10*FS, :) = uint8(ones(FS, 4));
+blanks((11*FS+1):12*FS, :) = uint8(ones(FS, 4));
+blanks((13*FS+1):14*FS, :) = uint8(ones(FS, 4));
+blanks((15*FS+1):16*FS, :) = uint8(ones(FS, 4));
+blanks((17*FS+1):18*FS, :) = uint8(ones(FS, 4));
 
+bin_sum_blanked = bin_sum .* blanks;
+figure;
+plot(raw_time, bin_sum_blanked);
+title('Binary Sum Blanked');
 
-% create data sampled at 10 Hz into moves array (first column is time step)
-moves=[1.0 1.0];
+bin_sum_2 = smoothdata(bin_sum, 1, 'movmedian', 400);
+figure;
+plot(raw_time, bin_sum_2);
+title('Binary Sum 2');
 
-%%direct control
-
-%figure(8)
-%plot(moves(:,1), moves(:,2),':+');
-%text(10,3,sprintf('%s\nDC Avg = %d ;  LPF = %d \nThresholds=%4.2f %4.2f %4.2f %4.2f\nUse Env = %d ; Envelope Width=%d\nIntent filter=%d ',...
-%    a,DC_Avg,LPF,thres_start,use_env,envelope, Intent_filter),...
-%     'HorizontalAlignment','left')
-
-%save ('./Dorsey/movements_', 'moves');
-
-if teaching
-    k = waitforbuttonpress;
+states = zeros(9,1);
+for i = 0:8
+    start = (2*i + 1)*FS + 1;
+    stop  = 2*(i + 1)*FS;
+    states(i+1) = mode(bin_sum_2(start:stop));
 end
- 
