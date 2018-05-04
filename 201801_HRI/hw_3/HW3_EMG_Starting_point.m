@@ -88,8 +88,10 @@ shifted_channels = abs(raw_channels - dc_avg);
 
 
 
-% Zero Crossing or MAV.
+% LPF
 mav = smoothdata(shifted_channels, 1, 'movmean', [0, LPF-1]);
+
+% No envelope detection.
 
 % figure;
 % subplot(2,2,1);
